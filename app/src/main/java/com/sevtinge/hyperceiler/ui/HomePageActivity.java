@@ -13,7 +13,6 @@ import static com.sevtinge.hyperceiler.libhook.utils.api.DeviceHelper.System.isV
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.CountDownTimer;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -66,6 +65,8 @@ public class HomePageActivity extends AppCompatActivity
 
     public SwitchManager mSwitchManager;
     private boolean mIsUnsupportedVersionExiting;
+    // 保存 onCreate 的 savedInstanceState，以便用户在“继续”后重新执行初始化
+    private Bundle mSavedInstanceState;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -75,6 +76,9 @@ public class HomePageActivity extends AppCompatActivity
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // 保存传入的 savedInstanceState，供在用户点击“继续”后使用
+        mSavedInstanceState = savedInstanceState;
+
         if (PersistConfig.isAprilFoolsThemeView) setTheme(R.style.HomePageAprilFoolsTheme);
         if (!OobeUtils.isProvisioned(this) && !OobeUtils.isDebugOobeMode(this)) {
             startActivity(new Intent(this, SplashActivity.class));
@@ -85,6 +89,12 @@ public class HomePageActivity extends AppCompatActivity
             showUnsupportedVersionDialog();
             return;
         }
+
+        // 原来在这里的初始化逻辑被抽取到 startHomeSetup()
+        startHomeSetup(savedInstanceState);
+    }
+
+    private void startHomeSetup(@Nullable Bundle savedInstanceState) {
         // Activity 启动阶段，绑定 UI 任务（如签名校验弹窗、公告展示）
         AppInitializer.initOnActivityCreate(this, this);
         setContentView(R.layout.activity_home);
@@ -222,37 +232,20 @@ public class HomePageActivity extends AppCompatActivity
                 : supportedVersionText + "\n" + partialSupportedVersionText;
         }
 
+        // 弹窗：增加“继续/忽略”按钮，移除 30 秒自动退出逻辑
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setCancelable(false)
             .setTitle(R.string.warn)
             .setMessage(getString(R.string.homepage_unsupported_version_message, versionText, supportedVersionText))
             .setPositiveButton(R.string.exit, (d, which) -> exitForUnsupportedVersion())
+            .setNegativeButton(R.string.ignore, (d, which) -> {
+                d.dismiss();
+                // 用户选择继续：按正常流程初始化首页
+                startHomeSetup(mSavedInstanceState);
+            })
             .create();
 
         dialog.show();
-
-        final var button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-        if (button == null) {
-            exitForUnsupportedVersion();
-            return;
-        }
-
-        button.setText(getString(R.string.exit) + " (30)");
-
-        new CountDownTimer(30_000L, 1_000L) {
-            @Override
-            public void onTick(long millisUntilFinished) {
-                button.setText(getString(R.string.exit) + " (" + (millisUntilFinished / 1000L) + ")");
-            }
-
-            @Override
-            public void onFinish() {
-                if (!isFinishing() && !isDestroyed()) {
-                    dialog.dismiss();
-                }
-                exitForUnsupportedVersion();
-            }
-        }.start();
     }
 
     private String formatHyperOsVersion() {
