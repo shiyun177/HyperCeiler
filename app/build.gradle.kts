@@ -115,6 +115,12 @@ android {
                 keyAlias = getString("keyAlias", "KEY_ALIAS", "Key alias")
                 keyPassword = getString("keyPassword", "KEY_PASSWORD", "Key password")
             }
+            // read optional storeType (from signing.properties or env STORE_TYPE)
+            val configuredStoreType = properties?.getProperty("storeType")
+                ?: System.getenv("STORE_TYPE")
+            if (!configuredStoreType.isNullOrBlank()) {
+                storeType = configuredStoreType
+            }
             enableV1Signing = true
             enableV2Signing = true
             enableV3Signing = true
